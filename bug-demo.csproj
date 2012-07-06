@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>10.0.0</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{381D32CC-323E-429E-9CC0-B601B08BD8B9}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>bugdemo</RootNamespace>
+    <AssemblyName>bug-demo</AssemblyName>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <WarningLevel>4</WarningLevel>
+    <Externalconsole>true</Externalconsole>
+    <Commandlineparameters>client</Commandlineparameters>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Helper.cs" />
+    <Compile Include="IMonitoredTcpConnection.cs" />
+    <Compile Include="ITcpConnection.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="TcpClientConnector.cs" />
+    <Compile Include="TcpConfiguration.cs" />
+    <Compile Include="TcpConnection.cs" />
+    <Compile Include="TcpConnectionBase.cs" />
+    <Compile Include="TcpConnectionMonitor.cs" />
+    <Compile Include="TcpServerListener.cs" />
+    <Compile Include="test_random_bidirectional_transfer.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>

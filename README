@@ -1,0 +1,17 @@
+This is an extract of real code that quite reliably shows the observed problem.  However, whether you will be able to observe the problem depends 
+primarily on your hardware.  It typically takes no more than a minute or two to see the problem, but sometimes it runs smoothly event up to 30 minutes.  
+
+You should watch for messages like the following one. 
+
+# 127.0.0.1:2100 10613ms since last send started. No completion callback received, but socket status is READY_FOR_SEND. In send: 22
+
+Sometimes it appears once and then goes away.  This case is bad as the callback is delayed for more than 5 seconds without any reason.  (We control 
+CPU and network load). But more serious problem is that sometimes missed callback does not arrive at all.  This message is repeated multiple times in this case.
+
+You definitely can find out all the details in the code, but in a few words we are looking for a sockets with SendAsync issued more than a second ago, such 
+that we have not received a callback yet, but Socket.poll reports ready for send. 
+
+
+
+
+
