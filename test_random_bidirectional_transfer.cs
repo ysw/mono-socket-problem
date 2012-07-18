@@ -155,33 +155,30 @@ namespace EventStore.Transport.Tcp.Tests
 			};
 
 			if (rnd.Next (5) != 0) {
-				ThreadPool.QueueUserWorkItem (v => 
-				{
-					long h = 1;
-					// random cpu busy delay
-					for (long i = 0; i < rnd.Next(1000000000); i++)
-						h = h + i;
-					for (long i = 0; i < rnd.Next(1000000000); i++)
-						h = h + i;
-					for (long i = 0; i < rnd.Next(1000000000); i++)
-						h = h + i;
-					for (long i = 0; i < rnd.Next(1000000000); i++)
-						h = h + i;
+				small = true;
+				var loopCount = rnd.Next(10000); 		
+				var nextRnd = 	 rnd.Next (4);
+				for (var k = 0; k < 10; k++)
+					ThreadPool.QueueUserWorkItem (v => 
+					{
+						long h = 1;
+						// random cpu busy delay
+						for (long i = 0; i < loopCount; i++)
+							h = h + i;
 					// randon cpu free delay
-					Thread.Sleep (50 + rnd.Next (5));
-					callBack (null);
-					if (!small && rnd.Next (4) == 0) {
-						Thread.Sleep (rnd.Next (5));
-						ThreadPool.QueueUserWorkItem (callBack);
+						callBack (null);
+						if (!small && nextRnd == 0) {
+							//Thread.Sleep (rnd.Next (5));
+							ThreadPool.QueueUserWorkItem (callBack);
+						}
 					}
-				}
-				);
+					);
 			}
 			else 
 			{
 				callBack (null);
-				callBack (null);
-				callBack (null);
+//				callBack (null);
+//				callBack (null);
 			}
         }
 
