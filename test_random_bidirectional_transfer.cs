@@ -92,7 +92,7 @@ namespace EventStore.Transport.Tcp.Tests
             _totalSent[tcpConnection] = 0;
             tcpConnection.ReceiveAsync(ClientReceiveCallback);
             SendRandomData(tcpConnection, small: false);
-            StartPing(tcpConnection);
+//            StartPing(tcpConnection);
         }
 
         private void ClientOnConnectionFailed(TcpConnection tcpConnection, SocketError socketError)
