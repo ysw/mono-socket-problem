@@ -254,8 +254,6 @@ namespace EventStore.Transport.Tcp
         {
             lock (_lock)
             {
-                if (_lastSendStarted != null)
-                    throw new Exception("Concurrent send deteced");
                 _inStartSending = false;
             }
         }
