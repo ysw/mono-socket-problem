@@ -13,6 +13,8 @@ namespace EventStore.Transport.Tcp
 
     public class TcpConnection : TcpConnectionBase, ITcpConnection
     {
+        private readonly object _masterLock = new object();
+
         internal static TcpConnection CreateConnectingTcpConnection(IPEndPoint remoteEndPoint, TcpClientConnector connector, Action<TcpConnection> onConnectionEstablished, Action<TcpConnection, SocketError> onConnectionFailed)
         {
             var connection = new TcpConnection(remoteEndPoint);
@@ -91,23 +93,27 @@ namespace EventStore.Transport.Tcp
         private new void InitSocket (Socket socket)
 		{
 			base.InitSocket (socket, EffectiveEndPoint);
-			lock (_sendingLock) {
-				_socket = socket;
-				try {
-					socket.NoDelay = true;
-					//socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer, TcpConfiguration.SocketBufferSize);
-					//socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer, TcpConfiguration.SocketBufferSize);
-				} catch (ObjectDisposedException) {
-					CloseInternal (SocketError.Shutdown);
-					_socket = null;
-					return;
-				}
+            lock (_sendingLock)
+            {
+                _socket = socket;
+                try
+                {
+                    socket.NoDelay = true;
+                    //socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer, TcpConfiguration.SocketBufferSize);
+                    //socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer, TcpConfiguration.SocketBufferSize);
+                }
+                catch (ObjectDisposedException)
+                {
+                    CloseInternal(SocketError.Shutdown);
+                    _socket = null;
+                    return;
+                }
 
-				_receiveSocketArgs = new SocketAsyncEventArgs ();
-				_receiveSocketArgs.AcceptSocket = socket;
-				_receiveSocketArgs.Completed += OnReceiveAsyncCompleted;
+                _receiveSocketArgs = new SocketAsyncEventArgs();
+                _receiveSocketArgs.AcceptSocket = socket;
+                _receiveSocketArgs.Completed += OnReceiveAsyncCompleted;
 
-				_sendSocketArgs = new SocketAsyncEventArgs ();
+                _sendSocketArgs = new SocketAsyncEventArgs();
                 _sendSocketArgs.AcceptSocket = socket;
                 _sendSocketArgs.Completed += OnSendAsyncCompleted;
             }
@@ -157,7 +163,7 @@ namespace EventStore.Transport.Tcp
                         break;
                 }
             Interlocked.Add(ref _bytesSent, _memoryStream.Length);
-            _sendSocketArgs.SetBuffer(_memoryStream.GetBuffer(), 0, (int) _memoryStream.Length);
+            lock (_masterLock) _sendSocketArgs.SetBuffer(_memoryStream.GetBuffer(), 0, (int)_memoryStream.Length);
 
 			if (_sendSocketArgs.Count == 0)
 			{
@@ -173,7 +179,9 @@ namespace EventStore.Transport.Tcp
 
                 //Console.WriteLine(String.Format("{0:mmss.fff}", DateTime.Now) + " sending " + _memoryStream.Length + " bytes.");
                 NotifySendStarting((uint) _sendSocketArgs.Count);
-                var firedAsync = _sendSocketArgs.AcceptSocket.SendAsync(_sendSocketArgs);
+                bool firedAsync;
+                lock (_masterLock) 
+                    firedAsync = _sendSocketArgs.AcceptSocket.SendAsync(_sendSocketArgs);
                 if (!firedAsync)
                     ProcessSend(_sendSocketArgs);
             }
@@ -191,15 +199,18 @@ namespace EventStore.Transport.Tcp
 
         private void ProcessSend(SocketAsyncEventArgs socketArgs)
         {
+            if (socketArgs != _sendSocketArgs)
+                throw new Exception("socketArgs != _sendSocketArgs");
+
             Interlocked.Increment(ref _sentAsyncCallbacks);
-            if (socketArgs.SocketError != SocketError.Success)
+            if (_sendSocketArgs.SocketError != SocketError.Success)
             {
                 NotifySendCompleted(0);
                 ReturnSendingSocketArgs();
-                CloseInternal(socketArgs.SocketError);
+                CloseInternal(_sendSocketArgs.SocketError);
                 return;
             }
-            NotifySendCompleted((uint) socketArgs.Count);
+            NotifySendCompleted((uint) _sendSocketArgs.Count);
             //Console.WriteLine(String.Format("{0:mmss.fff}", DateTime.Now) + " done sending " + _memoryStream.Length + " bytes.");
             var sentPackages = Interlocked.Increment(ref _packagesSent);
 
@@ -229,7 +240,7 @@ namespace EventStore.Transport.Tcp
 			var buffer = new byte[4096];
 			lock (_receiveSocketArgs) 
 			{
-                _receiveSocketArgs.SetBuffer(buffer, 0, buffer.Length);
+                lock (_masterLock) _receiveSocketArgs.SetBuffer(buffer, 0, buffer.Length);
          		if (_receiveSocketArgs.Buffer == null)
 	        		throw new Exception("Buffer was not set");
 			}
@@ -241,7 +252,8 @@ namespace EventStore.Transport.Tcp
 				lock (_receiveSocketArgs) {
     				if (_receiveSocketArgs.Buffer == null)
 	    				throw new Exception("Buffer was lost");
-                 	 firedAsync = _receiveSocketArgs.AcceptSocket.ReceiveAsync(_receiveSocketArgs);
+                    lock (_masterLock) 
+                        firedAsync = _receiveSocketArgs.AcceptSocket.ReceiveAsync(_receiveSocketArgs);
 				}
                 if (!firedAsync) {
 					Console.WriteLine("SYNC receive");					                  
@@ -262,21 +274,21 @@ namespace EventStore.Transport.Tcp
 
         private void ProcessReceive(SocketAsyncEventArgs socketArgs)
         {
-			if (socketArgs != _receiveSocketArgs)
+            if (socketArgs != _receiveSocketArgs)
 				throw new Exception("Invalid socket args received");
             Interlocked.Increment(ref _recvAsyncCallbacks);
 
             // socket closed normally or some error occured
-            if (socketArgs.BytesTransferred == 0 || socketArgs.SocketError != SocketError.Success)
+            if (_receiveSocketArgs.BytesTransferred == 0 || _receiveSocketArgs.SocketError != SocketError.Success)
             {
                 NotifyReceiveCompleted(0);
                 ReturnReceivingSocketArgs();
-                CloseInternal(socketArgs.SocketError);
+                CloseInternal(_receiveSocketArgs.SocketError);
                 return;
             }
-            NotifyReceiveCompleted((uint) socketArgs.BytesTransferred);
+            NotifyReceiveCompleted((uint) _receiveSocketArgs.BytesTransferred);
             var receivedPackages = Interlocked.Increment(ref _packagesReceived);
-            var receivedBytes = Interlocked.Add(ref _bytesReceived, socketArgs.BytesTransferred);
+            var receivedBytes = Interlocked.Add(ref _bytesReceived, _receiveSocketArgs.BytesTransferred);
             //Console.WriteLine(String.Format("{0:mmss.fff}", DateTime.Now) + " received " + socketArgs.BytesTransferred + " bytes.");
             // OK, so what does this line of code do? It makes an ArraySegment<byte> representing the data 
             // that we actually read.
@@ -287,18 +299,18 @@ namespace EventStore.Transport.Tcp
             // this buffer).
             // This should be benchmarked vs copying the byte array every time into a new byte array
             var receiveBufferSegment =
-                new ArraySegment<byte>(socketArgs.Buffer, socketArgs.Offset, socketArgs.BytesTransferred);
+                new ArraySegment<byte>(_receiveSocketArgs.Buffer, _receiveSocketArgs.Offset, _receiveSocketArgs.BytesTransferred);
 
             lock (_receivingLock)
             {
-                var fullBuffer = new ArraySegment<byte>(socketArgs.Buffer, socketArgs.Offset, socketArgs.Count);
+                var fullBuffer = new ArraySegment<byte>(_receiveSocketArgs.Buffer, _receiveSocketArgs.Offset, _receiveSocketArgs.Count);
                 _receiveQueue.Enqueue(receiveBufferSegment);
             }
 
 			lock (_receiveSocketArgs) {
-				if (socketArgs.Buffer == null)
+				if (_receiveSocketArgs.Buffer == null)
 					throw new Exception("Cleaning already null buffer");
-            	socketArgs.SetBuffer(null, 0, 0);
+            	lock (_masterLock) _receiveSocketArgs.SetBuffer(null, 0, 0);
 			}
 
             StartReceive();
