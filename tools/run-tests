@@ -1,0 +1,30 @@
+#!/bin/bash
+
+function err() {
+  exit 1
+}
+
+export PATH=/opt/mono/bin:$PATH
+
+
+if [[ -d mono-socket-problem ]] ; then
+  pushd mono-socket-problem || err
+  git pull || err
+  popd || err
+else
+  git clone git://github.com/ysw/mono-socket-problem.git || err
+fi
+
+
+
+pushd mono-socket-problem/ConcurrentTest || err
+
+xbuild || err
+
+popd || err
+
+pushd mono-socket-problem/SocketTest || err
+
+xbuild || err
+
+popd || err
