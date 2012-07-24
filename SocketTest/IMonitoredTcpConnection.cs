@@ -14,6 +14,7 @@ namespace EventStore.Transport.Tcp
         bool IsClosed { get; }
 
         bool InSend { get; }
+        bool InStartSending { get; }
         bool InReceive { get; }
 
         DateTime? LastSendStarted { get; }

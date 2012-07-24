@@ -166,6 +166,8 @@ namespace EventStore.Transport.Tcp
             bool isReadyForSend = connection.IsReadyForSend;
             DateTime? lastSendStarted = connection.LastSendStarted;
 			uint inSendBytes = connection.InSendBytes;
+            bool inStartSending = connection.InStartSending;
+
 
             int sinceLastSend = (int) (DateTime.Now - lastSendStarted.GetValueOrDefault()).TotalMilliseconds;
             bool missingSendCallback = inSend && isReadyForSend && sinceLastSend > 500;
@@ -174,8 +176,8 @@ namespace EventStore.Transport.Tcp
             {
 				// _anySendBlockedOnLastRun = true;
                 Console.Error.WriteLine(
-					"# {0} {1}ms since last send started. No completion callback received, but socket status is READY_FOR_SEND. In send: {2}",
-                    connection, sinceLastSend, inSendBytes);
+					"# {0} {1}ms since last send started. No completion callback received, but socket status is READY_FOR_SEND. In send: {2}. In start_sending: {3}",
+                    connection, sinceLastSend, inSendBytes, inStartSending);
             }
             connectionData.LastMissingSendCallBack = missingSendCallback;
         }

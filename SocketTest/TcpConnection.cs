@@ -174,6 +174,7 @@ namespace EventStore.Transport.Tcp
                 //Console.WriteLine(String.Format("{0:mmss.fff}", DateTime.Now) + " sending " + _memoryStream.Length + " bytes.");
                 NotifySendStarting((uint) _sendSocketArgs.Count);
                 var firedAsync = _sendSocketArgs.AcceptSocket.SendAsync(_sendSocketArgs);
+                NotifyStartSendingCompleted();
                 if (!firedAsync)
                     ProcessSend(_sendSocketArgs);
             }

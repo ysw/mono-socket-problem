@@ -22,6 +22,7 @@ namespace EventStore.Transport.Tcp
         private uint _pendingReceivedBytes;
         private long _totaBytesSent;
         private long _totaBytesReceived;
+        private bool _inStartSending;
 
         public TcpConnectionBase()
         {
@@ -118,6 +119,17 @@ namespace EventStore.Transport.Tcp
                 lock (_lock)
                 {
                     return _lastSendStarted != null;
+                }
+            }
+        }
+
+        public bool InStartSending
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _inStartSending;
                 }
             }
         }
@@ -234,6 +246,17 @@ namespace EventStore.Transport.Tcp
                 _lastSendStarted = DateTime.Now;
                 _pendingSendBytes -= bytes;
                 _inSendBytes += bytes;
+                _inStartSending = true;
+            }
+        }
+
+        protected void NotifyStartSendingCompleted()
+        {
+            lock (_lock)
+            {
+                if (_lastSendStarted != null)
+                    throw new Exception("Concurrent send deteced");
+                _inStartSending = false;
             }
         }
 
