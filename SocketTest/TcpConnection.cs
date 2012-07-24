@@ -53,7 +53,7 @@ namespace EventStore.Transport.Tcp
 
         public int SendQueueSize
         {
-            get { return _sendQueue.Count; }
+            get { lock (_sendQueueLock) return _sendQueue.Count; }
         }
 
         private Socket _socket;
@@ -61,6 +61,7 @@ namespace EventStore.Transport.Tcp
         private SocketAsyncEventArgs _sendSocketArgs;
 
         private readonly ConcurrentQueue<ArraySegment<byte>> _sendQueue = new ConcurrentQueue<ArraySegment<byte>>();
+        private readonly object _sendQueueLock = new object();
 
         private readonly Queue<ArraySegment<byte>> _receiveQueue =
             new Queue<ArraySegment<byte>>();
@@ -120,7 +121,7 @@ namespace EventStore.Transport.Tcp
                 uint bytes = 0;
                 foreach (var segment in data)
                 {
-                    _sendQueue.Enqueue(segment);
+                    lock (_sendQueueLock) _sendQueue.Enqueue(segment);
                     bytes += (uint)segment.Count;
                 }
                 NotifySendScheduled(bytes);
@@ -133,8 +134,9 @@ namespace EventStore.Transport.Tcp
         {
             lock (_sendingLock)
             {
-                if (_isSending || _sendQueue.Count == 0 || _socket == null)
-                    return;
+                lock (_sendQueueLock) 
+                    if (_isSending || _sendQueue.Count == 0 || _socket == null)
+                        return;
 
 				if (TcpConnectionMonitor.Default.IsSendBlocked())
 				{
@@ -146,13 +148,14 @@ namespace EventStore.Transport.Tcp
             _memoryStream.SetLength(0);
 
             ArraySegment<byte> sendPiece;
-            while (_sendQueue.TryDequeue(out sendPiece))
-            {
-                _memoryStream.Write(sendPiece.Array, sendPiece.Offset, sendPiece.Count);
+            lock (_sendQueueLock) 
+                while (_sendQueue.TryDequeue(out sendPiece))
+                {
+                    _memoryStream.Write(sendPiece.Array, sendPiece.Offset, sendPiece.Count);
 
-                if (_memoryStream.Length >= MaxSendPacketSize)
-                    break;
-            }
+                    if (_memoryStream.Length >= MaxSendPacketSize)
+                        break;
+                }
             Interlocked.Add(ref _bytesSent, _memoryStream.Length);
             _sendSocketArgs.SetBuffer(_memoryStream.GetBuffer(), 0, (int) _memoryStream.Length);
 
