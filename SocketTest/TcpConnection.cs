@@ -60,7 +60,7 @@ namespace EventStore.Transport.Tcp
         private SocketAsyncEventArgs _receiveSocketArgs;
         private SocketAsyncEventArgs _sendSocketArgs;
 
-        private readonly ConcurrentQueue<ArraySegment<byte>> _sendQueue = new ConcurrentQueue<ArraySegment<byte>>();
+        private readonly Queue<ArraySegment<byte>> _sendQueue = new Queue<ArraySegment<byte>>();
         private readonly object _sendQueueLock = new object();
 
         private readonly Queue<ArraySegment<byte>> _receiveQueue =
@@ -149,8 +149,9 @@ namespace EventStore.Transport.Tcp
 
             ArraySegment<byte> sendPiece;
             lock (_sendQueueLock) 
-                while (_sendQueue.TryDequeue(out sendPiece))
+                while (_sendQueue.Count > 0)
                 {
+					sendPiece = _sendQueue.Dequeue();
                     _memoryStream.Write(sendPiece.Array, sendPiece.Offset, sendPiece.Count);
 
                     if (_memoryStream.Length >= MaxSendPacketSize)
