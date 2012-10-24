@@ -4,16 +4,8 @@ function err() {
   echo FAIL!
   exit 1
 }
-if ! ( grep badgerports /etc/apt/sources.list ) ; then
-  apt-add-repository "deb http://badgerports.org lucid main" || err
-fi
 
-if [[ ! -e directhex.ppa.asc ]] ; then
-  wget http://badgerports.org/directhex.ppa.asc || err
-fi
-
-apt-key add directhex.ppa.asc || err
-apt-get update || err
+cd ~ || err
 
 MONO_PREFIX=/opt/mono || err
 export DYLD_LIBRARY_FALLBACK_PATH=$MONO_PREFIX/lib:$DYLD_LIBRARY_FALLBACK_PATH || err
@@ -22,7 +14,7 @@ export C_INCLUDE_PATH=$MONO_PREFIX/include || err
 export ACLOCAL_PATH=$MONO_PREFIX/share/aclocal || err
 export PKG_CONFIG_PATH=$MONO_PREFIX/lib/pkgconfig || err
 export PATH=$MONO_PREFIX/bin:$PATH || err
-PS1="[mono] \w @ "r | err
+PS1="[mono] \w @ "r || err
 
 
 
