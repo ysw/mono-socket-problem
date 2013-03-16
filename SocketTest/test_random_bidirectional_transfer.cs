@@ -33,7 +33,7 @@ namespace EventStore.Transport.Tcp.Tests
             }
         }
 
-		int[] _ports = Enumerable.Range(2001, 100).ToArray();
+		int[] _ports = Enumerable.Range(2001, 10).ToArray();
 
         public void multiple_point_send ()
 		{
@@ -173,7 +173,7 @@ namespace EventStore.Transport.Tcp.Tests
 
 			if (rnd.Next (3) != 0) {
 				small = true;
-				var loopCount = rnd.Next(1000); 		
+				var loopCount = rnd.Next(100); 		
 				var nextRnd = 	 rnd.Next (4);
 				for (var k = 0; k < 10; k++)
 					ThreadPool.QueueUserWorkItem (v => 

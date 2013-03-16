@@ -120,6 +120,7 @@ namespace EventStore.Transport.Tcp
             CheckPendingSend(connection);
             CheckMissingSendCallback(connectionData, connection);
             CheckMissingReceiveCallback(connectionData, connection);
+            CheckReceiveTimeout(connectionData, connection);
         }
 
         private void UpdateStatistics(ConnectionData connectionData)
@@ -157,6 +158,20 @@ namespace EventStore.Transport.Tcp
                     connection, sinceLastReceive);
             }
             connectionData.LastMissingReceiveCallBack = missingReceiveCallback;
+        }
+
+        private static void CheckReceiveTimeout(ConnectionData connectionData, IMonitoredTcpConnection connection)
+        {
+            DateTime? lastReceiveStarted = connection.LastReceiveStarted;
+            if (lastReceiveStarted == null)
+                return;
+            int sinceLastReceive = (int)(DateTime.Now - lastReceiveStarted.GetValueOrDefault()).TotalMilliseconds;
+            if (sinceLastReceive > 10000)
+            {
+                Console.Error.WriteLine(
+                    "# {0} {1}ms since last Receive started. No data receive din 10000ms. TIMEOUT DETECTED",
+                    connection, sinceLastReceive);
+            }
         }
 
         private void CheckMissingSendCallback(ConnectionData connectionData, IMonitoredTcpConnection connection)
