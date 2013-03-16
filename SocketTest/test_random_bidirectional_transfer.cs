@@ -24,8 +24,13 @@ namespace EventStore.Transport.Tcp.Tests
         public void Setup()
         {
             _data = new byte[4*1024];
-            var rnd = new Random();
-            rnd.NextBytes(_data);
+            for (var i = 0; i < _data.Length/4; i++)
+            {
+                _data[i*4 + 3] = (byte) (i%256);
+                _data[i * 4 + 2] = (byte)(i / 256 % 256);
+                _data[i * 4 + 1] = (byte)(i / 256 / 256 % 256);
+                _data[i * 4 + 0] = (byte)(i / 256 / 256 / 256);
+            }
         }
 
 		int[] _ports = Enumerable.Range(2001, 100).ToArray();
@@ -77,13 +82,12 @@ namespace EventStore.Transport.Tcp.Tests
             _totalSent[tcpConnection] = 0;
             tcpConnection.ReceiveAsync(ServerReceiveCallback);
             SendRandomData(tcpConnection, small: false);
-            //StartPing(tcpConnection);
         }
 
         private void ServerReceiveCallback(ITcpConnection tcpConnection, IEnumerable<ArraySegment<byte>> arraySegments)
         {
-            tcpConnection.ReceiveAsync(ClientReceiveCallback);
             ReceiveAndSend(tcpConnection, arraySegments);
+            tcpConnection.ReceiveAsync(ClientReceiveCallback);
         }
 
         private void ClientOnConnectionEstablished(TcpConnection tcpConnection)
@@ -92,7 +96,6 @@ namespace EventStore.Transport.Tcp.Tests
             _totalSent[tcpConnection] = 0;
             tcpConnection.ReceiveAsync(ClientReceiveCallback);
             SendRandomData(tcpConnection, small: false);
-//            StartPing(tcpConnection);
         }
 
         private void ClientOnConnectionFailed(TcpConnection tcpConnection, SocketError socketError)
@@ -102,15 +105,33 @@ namespace EventStore.Transport.Tcp.Tests
 
         private void ClientReceiveCallback(ITcpConnection tcpConnection, IEnumerable<ArraySegment<byte>> arraySegments)
         {
-            tcpConnection.ReceiveAsync(ClientReceiveCallback);
             ReceiveAndSend(tcpConnection, arraySegments);
+            tcpConnection.ReceiveAsync(ClientReceiveCallback);
         }
 
         private int ReceiveData (ITcpConnection tcpConnection, IEnumerable<ArraySegment<byte>> data)
 		{
+            foreach (var segment in data)
+            {
+                if (segment.Count%4 != 0)
+                    throw new Exception(4.ToString());
+                var totalReceived = Interlocked.Read(ref _received);
+                var received = _totalReceived[tcpConnection];
+                for (var i = 0; i < segment.Count/4; i++)
+                {
+                    for (var j = 0; j < 4; j++)
+                    {
+                        var v = _data[(received + i*4 + j)%_data.Length];
+                        var w = segment.Array[segment.Offset + i*4 + j];
+                        if (v != w)
+                            throw new Exception("v != w");
+                    }
+                }
+
+                _totalReceived[tcpConnection] += (long)segment.Count;
+                Interlocked.Add(ref _received, segment.Count);
+            }
 			int value = data.Sum (v => v.Count);
-			_totalReceived [tcpConnection] += (long)value;
-			Interlocked.Add (ref _received, value);
 			return value;
         }
 
@@ -120,43 +141,39 @@ namespace EventStore.Transport.Tcp.Tests
             SendRandomData(tcpConnection, small: _totalSent[tcpConnection] - _totalReceived[tcpConnection] > 32768 || received > 64);
         }
 
-        private void StartPing(TcpConnection tcpConnection)
-        {
-            WaitCallback callBack = null;
-            callBack = state =>
-                           {
-                              //var outData = new List<ArraySegment<byte>>();
-                               //outData.Add(new ArraySegment<byte>(_data, 0, 4));
-                               //Interlocked.Add(ref _sent, 4);
-                               //tcpConnection.TotalSent += 4;
-                               //tcpConnection.EnqueueSend(outData);
-                               Thread.Sleep(2000);
-                               ThreadPool.QueueUserWorkItem(callBack);
-                           };
-            ThreadPool.QueueUserWorkItem(callBack);
-        }
-
         private void SendRandomData (ITcpConnection tcpConnection, bool small)
 		{
 			var rnd = new Random ();
 			WaitCallback callBack = state =>
-			{ 
-				
-				var outData = new List<ArraySegment<byte>> ();
-				int index = 0;
-										        
-				int size = 1 + ((!small && rnd.Next (2) == 0) ? _data.Length/2 + rnd.Next (_data.Length/2) : rnd.Next (32));
-				int totalSize = 0;
-				outData.Add (new ArraySegment<byte> (_data, index, size));
-				totalSize += size;
-				Interlocked.Add (ref _sent, size);
-				_totalSent [tcpConnection] += totalSize;
-				tcpConnection.EnqueueSend (outData);
+			{
+			    lock (tcpConnection) // to make sure ordered data generation -- even if we internally lock in enqueue
+                    // the better test would be to generate consistent packages and verify them without this lock, but
+                    // due to internal lock this lock just reduces probability of our problems not eliminating them
+			    {
+			        var outData = new List<ArraySegment<byte>>();
+			        var sent = _totalSent[tcpConnection];
+			        var index = (int) (sent%_data.Length);
+
+			        int size = (4 + ((!small && rnd.Next(2) == 0) ? _data.Length/2 + rnd.Next(_data.Length/2) : rnd.Next(32)))/4
+			                   *4;
+			        if (index + size <= _data.Length)
+			        {
+			            outData.Add(new ArraySegment<byte>(_data, index, size));
+			        }
+			        else
+			        {
+			            outData.Add(new ArraySegment<byte>(_data, index, _data.Length - index));
+			            outData.Add(new ArraySegment<byte>(_data, 0, size - _data.Length + index));
+			        }
+                    _totalSent[tcpConnection] += size;
+                    Interlocked.Add(ref _sent, size);
+			        tcpConnection.EnqueueSend(outData);
+			    }
 			};
 
-			if (rnd.Next (5) != 0) {
+			if (rnd.Next (3) != 0) {
 				small = true;
-				var loopCount = rnd.Next(10000); 		
+				var loopCount = rnd.Next(1000); 		
 				var nextRnd = 	 rnd.Next (4);
 				for (var k = 0; k < 10; k++)
 					ThreadPool.QueueUserWorkItem (v => 

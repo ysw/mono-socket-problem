@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace EventStore.Transport.Tcp.Tests
 {
@@ -24,6 +25,7 @@ namespace EventStore.Transport.Tcp.Tests
             {
                 case "server": return new ServerComand();
                 case "client": return new ClientCommand();
+                case "both": return new BothCommand();
                 default: return null;
             }
         }
@@ -49,6 +51,18 @@ namespace EventStore.Transport.Tcp.Tests
         {
             var test = new test_random_bidirectional_transfer();
             test.multiple_point_receive();
+        }
+    }
+
+    internal class BothCommand : Command
+    {
+        public override void Run()
+        {
+            var server = new ServerComand();
+            var client = new ClientCommand();
+            var serverTask = Task.Factory.StartNew(server.Run);
+            var clientTask = Task.Factory.StartNew(client.Run);
+            Task.WaitAll(serverTask, clientTask);
         }
     }
 
